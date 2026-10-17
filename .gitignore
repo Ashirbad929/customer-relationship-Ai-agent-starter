@@ -1,0 +1,8 @@
+target/
+.idea/
+*.iml
+.env
+data/*.txt
+data/*.csv
+data/*.json
+!.gitkeep
