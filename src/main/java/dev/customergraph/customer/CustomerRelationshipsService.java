@@ -6,6 +6,8 @@ import com.falkordb.ResultSet;
 import dev.customergraph.customer.CustomerRelationshipsResponse.AccountSummary;
 import dev.customergraph.customer.CustomerRelationshipsResponse.CustomerProfile;
 import dev.customergraph.customer.CustomerRelationshipsResponse.PossibleConnection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -18,6 +20,8 @@ import java.util.Map;
 @Service
 public class CustomerRelationshipsService {
 
+    private static final Logger log = LoggerFactory.getLogger(CustomerRelationshipsService.class);
+
     private static final String CUSTOMER_QUERY = """
             MATCH (customer:Customer {customer_id: $customerId})
             RETURN customer.customer_id AS customerId,
@@ -28,9 +32,11 @@ public class CustomerRelationshipsService {
 
     private static final String ACCOUNTS_QUERY = """
             MATCH (customer:Customer {customer_id: $customerId})-[holding:HOLDS]->(account:Account)
+            OPTIONAL MATCH (account)<-[:HOLDS]-(holder:Customer)
             RETURN account.account_id AS accountId,
                    account.account_type AS accountType,
-                   holding.role AS role
+                   holding.role AS role,
+                   count(DISTINCT holder) AS holderCount
             ORDER BY account.account_id
             """;
 
@@ -57,11 +63,13 @@ public class CustomerRelationshipsService {
     }
 
     public CustomerRelationshipsResponse getRelationships(String customerId) {
+        log.debug("Querying FalkorDB for customer relationships");
         Map<String, Object> parameters = Map.of("customerId", customerId);
 
         ResultSet customerResult = graph.readOnlyQuery(CUSTOMER_QUERY, parameters);
         Iterator<Record> customerIterator = customerResult.iterator();
         if (!customerIterator.hasNext()) {
+            log.debug("Customer relationship lookup returned no matching customer");
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found");
         }
         Record customerRecord = customerIterator.next();
@@ -73,10 +81,12 @@ public class CustomerRelationshipsService {
 
         List<AccountSummary> accounts = new ArrayList<>();
         for (Record record : graph.readOnlyQuery(ACCOUNTS_QUERY, parameters)) {
+            Number holderCount = record.getValue("holderCount");
             accounts.add(new AccountSummary(
                     record.getString("accountId"),
                     record.getString("accountType"),
-                    record.getString("role")));
+                    record.getString("role"),
+                    holderCount == null ? 0 : holderCount.longValue()));
         }
 
         List<PossibleConnection> possibleConnections = new ArrayList<>();
@@ -91,6 +101,8 @@ public class CustomerRelationshipsService {
                     sharedRecordCount == null ? 0 : sharedRecordCount.longValue()));
         }
 
+        log.debug("FalkorDB relationship lookup returned {} account(s) and {} possible connection(s)",
+                accounts.size(), possibleConnections.size());
         return new CustomerRelationshipsResponse(customer, List.copyOf(accounts), List.copyOf(possibleConnections));
     }
 }

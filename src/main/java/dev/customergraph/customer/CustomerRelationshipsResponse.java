@@ -10,7 +10,7 @@ public record CustomerRelationshipsResponse(
     public record CustomerProfile(String customerId, String firstName, String lastName) {
     }
 
-    public record AccountSummary(String accountId, String accountType, String role) {
+    public record AccountSummary(String accountId, String accountType, String role, long holderCount) {
     }
 
     public record PossibleConnection(
