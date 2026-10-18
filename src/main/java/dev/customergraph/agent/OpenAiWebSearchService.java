@@ -47,7 +47,6 @@ public class OpenAiWebSearchService {
                 "input", query,
                 "tools", List.of(Map.of("type", "web_search")),
                 "tool_choice", "required",
-                "reasoning", Map.of("effort", "none"),
                 "store", false);
 
         Map<?, ?> response;

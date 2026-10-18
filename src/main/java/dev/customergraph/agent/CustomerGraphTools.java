@@ -12,7 +12,6 @@ import dev.customergraph.customer.CustomerFinancialService;
 import dev.customergraph.customer.CustomerCardsResponse;
 import dev.customergraph.customer.CustomerBillsResponse;
 import dev.customergraph.customer.CustomerLoansResponse;
-import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ToolContext;
@@ -39,10 +38,7 @@ public class CustomerGraphTools {
     private final CustomerPhoneService customerPhoneService;
     private final CustomerEmailService customerEmailService;
     private final CustomerFinancialService customerFinancialService;
-    private final GeminiWebSearchService geminiWebSearchService;
     private final OpenAiWebSearchService openAiWebSearchService;
-    private final TavilyWebSearchService tavilyWebSearchService;
-    private final String selectedAiProvider;
 
     public CustomerGraphTools(
             CustomerRelationshipsService customerRelationshipsService,
@@ -50,19 +46,13 @@ public class CustomerGraphTools {
             CustomerPhoneService customerPhoneService,
             CustomerEmailService customerEmailService,
             CustomerFinancialService customerFinancialService,
-            GeminiWebSearchService geminiWebSearchService,
-            OpenAiWebSearchService openAiWebSearchService,
-            TavilyWebSearchService tavilyWebSearchService,
-            @Value("${app.ai.provider:google-genai}") String selectedAiProvider) {
+            OpenAiWebSearchService openAiWebSearchService) {
         this.customerRelationshipsService = customerRelationshipsService;
         this.customerAddressService = customerAddressService;
         this.customerPhoneService = customerPhoneService;
         this.customerEmailService = customerEmailService;
         this.customerFinancialService = customerFinancialService;
-        this.geminiWebSearchService = geminiWebSearchService;
         this.openAiWebSearchService = openAiWebSearchService;
-        this.tavilyWebSearchService = tavilyWebSearchService;
-        this.selectedAiProvider = selectedAiProvider;
     }
 
     @Tool(description = "Look up the selected customer's accounts and possible connections through shared address, phone, or email records. Use for account and relationship questions. Shared records are evidence of a possible connection, not proof of family.")
@@ -107,42 +97,18 @@ public class CustomerGraphTools {
         return customerFinancialService.getLoans(selectedCustomerId(toolContext));
     }
 
-    @Tool(description = "Search the public web with the configured AI provider for general current or external information. Use this as the general search provider and fallback when Tavily is unavailable or unsuitable. For ATM or nearby-place lookups, prefer the dedicated Tavily nearby-place search tool. Never send customer names, IDs, full street addresses, phone numbers, email addresses, or account details to web search. Return source links with the result.")
+    @Tool(description = "Search the public web directly through OpenAI for current or external information, including ATM and bank-branch listings. Use this tool whenever the user asks for web-search results. For customer-specific nearby searches, first retrieve the linked address and search using only city and postal code. Never send customer names, IDs, full street addresses, phone numbers, email addresses, or account details to web search. Include source links in the result.")
     public PublicWebSearchResponse searchPublicWeb(
             @ToolParam(description = "A concise public-information search query. Do not include customer-identifying or contact details.") String query,
             ToolContext toolContext) {
         String customerId = selectedCustomerId(toolContext);
         String safeQuery = removeCustomerData(query, customerId);
-        log.debug("Agent selected {} public web search; sanitized query length is {} characters",
-                selectedAiProvider, safeQuery.length());
-        return searchPublicWebWithSelectedProvider(safeQuery);
-    }
-
-    @Tool(description = "Search the public web with Tavily for nearby places such as ATMs and branches. Prefer this tool for ATM lookups and searches where place listings are needed. For customer-specific nearby searches, first retrieve the linked address and query only with city and postal code. Never include customer names, IDs, full street addresses, phone numbers, email addresses, or account details. Return source links with the results.")
-    public PublicWebSearchResponse searchNearbyPlacesWithTavily(
-            @ToolParam(description = "A concise public search query for nearby places, using only city and postal code when location is customer-derived.") String query,
-            ToolContext toolContext) {
-        String customerId = selectedCustomerId(toolContext);
-        String safeQuery = removeCustomerData(query, customerId);
-        log.debug("Agent selected Tavily place search; sanitized query length is {} characters", safeQuery.length());
-        try {
-            return tavilyWebSearchService.search(safeQuery);
-        } catch (RuntimeException exception) {
-            log.warn("Tavily place search failed; falling back to {} web search: {}",
-                    selectedAiProvider, exception.getMessage());
-            return searchPublicWebWithSelectedProvider(safeQuery);
-        }
-    }
-
-    private PublicWebSearchResponse searchPublicWebWithSelectedProvider(String query) {
-        if ("openai".equals(selectedAiProvider)) {
-            OpenAiWebSearchResponse response = openAiWebSearchService.search(query);
-            List<PublicWebSearchResponse.Source> sources = response.sources().stream()
-                    .map(source -> new PublicWebSearchResponse.Source(source.title(), source.url()))
-                    .toList();
-            return new PublicWebSearchResponse(response.answer(), sources);
-        }
-        return geminiWebSearchService.search(query);
+        log.debug("Agent selected OpenAI web search; sanitized query length is {} characters", safeQuery.length());
+        OpenAiWebSearchResponse response = openAiWebSearchService.search(safeQuery);
+        List<PublicWebSearchResponse.Source> sources = response.sources().stream()
+                .map(source -> new PublicWebSearchResponse.Source(source.title(), source.url()))
+                .toList();
+        return new PublicWebSearchResponse(response.answer(), sources);
     }
 
     private String selectedCustomerId(ToolContext toolContext) {
