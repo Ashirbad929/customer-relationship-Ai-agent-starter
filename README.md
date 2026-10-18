@@ -52,7 +52,7 @@ The graph connection endpoint runs a harmless `RETURN 1` query against the confi
 
 ## Data
 
-The numbered Cypher import files are included in `data/cypher/`, including a separate synthetic extension for customers `C1001`–`C1030` and 60 synthetic transaction records for 20 of those customers. The loader does not generate records or parse the pipe-delimited fixtures directly under `data/`. If the included demo extension (`C1001`–`C1030`, files 13–22) is already loaded, add only the transaction data with `py scripts/load_demo_data.py data/cypher/23_demo_transactions.txt`; this avoids rerunning earlier dataset files. For a fresh graph, use the full default dataset import so the demo accounts exist before the transaction file runs. Confirm the source dataset is approved for sharing before publishing the repository. Never commit credentials.
+The numbered Cypher import files are included in `data/cypher/`, including a separate synthetic extension for customers `C1001`–`C1030` and 4,503 synthetic transaction records covering all 1,030 customers through their account holdings. The loader does not generate records or parse the pipe-delimited fixtures directly under `data/`. If the account and customer imports are already loaded, add only the transactions with `py scripts/load_demo_data.py data/cypher/23_demo_transactions.txt`; this avoids rerunning earlier dataset files. For a fresh graph, use the full default dataset import so the accounts exist before the transaction file runs. Transaction activity is synthetic and must not be used to infer real co-spending, family relationships, or suspicious behavior. Confirm the source dataset is approved for sharing before publishing the repository. Never commit credentials.
 
 For a read-aloud project pitch, feature walkthrough, and checked Windows startup steps, see [DEMO_GUIDE.md](DEMO_GUIDE.md).
 
@@ -93,7 +93,7 @@ npm run dev
 
 Open `http://localhost:5173` and enter a customer ID to view the relationship graph and account-holder analytics. The Relationships, Cards & bills, Loans, and Contact details views call the direct customer endpoints and do not require an AI-provider API call. The assistant panel can answer questions using separate FalkorDB tools for relationship, address, phone, email, card, bill, and loan data. Chat requires `AGENT_ENABLED=true`, a selected provider, and that provider's API key/quota. Public web searches, including ATM and branch lookups, use OpenAI's Responses API web-search tool and require `OPENAI_API_KEY`, regardless of the chat provider. The frontend uses Vite's development proxy, so requests reach Spring Boot at `http://localhost:8080`.
 
-When a chat question asks about cards, bills, or loans, the frontend fetches the matching graph records and expands the SVG with account-to-product, account-to-bill, or account-to-loan links. Transaction and merchant analysis is available to the agent for the synthetic demo customers who have transaction fixtures.
+When a chat question asks about cards, bills, or loans, the frontend fetches the matching graph records and expands the SVG with account-to-product, account-to-bill, or account-to-loan links. Transaction and merchant analysis is available to the agent for all included customers after the transaction fixture is loaded. Activity on a joint account is shared account activity and cannot be assigned to an individual holder.
 
 ## Agent integration
 

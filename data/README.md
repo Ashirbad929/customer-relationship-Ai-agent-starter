@@ -2,7 +2,7 @@
 
 ## Executable Cypher imports
 
-`cypher/` contains the numbered Cypher `.txt` imports used to load the graph. It includes the existing customer/account/address/contact data and supplemental card, loan, and bill records, plus a generated demo extension with 30 additional customers (`C1001`–`C1030`). The final import adds 60 synthetic account transactions for 20 demo customers and connects them to merchant nodes, enabling multi-hop customer → account → transaction → merchant analysis.
+`cypher/` contains the numbered Cypher `.txt` imports used to load the graph. It includes the existing customer/account/address/contact data and supplemental card, loan, and bill records, plus a generated demo extension with 30 additional customers (`C1001`–`C1030`). The final import adds 4,503 synthetic account transactions across the full 1,030-customer dataset and connects them to merchant nodes, enabling multi-hop customer → account → transaction → merchant analysis.
 
 Run from the project root:
 
@@ -11,7 +11,7 @@ python -m pip install -r requirements-demo.txt
 python scripts/load_demo_data.py
 ```
 
-The loader executes numbered Cypher files in order and skips the supplemental guide text. Most queries use `MERGE`, so the import can be rerun; the loader also skips identical duplicate query files. The 30 added customers are grouped three per synthetic address and joint savings account. Their individual accounts include 10 credit cards, 10 loans, and 10 savings accounts, with corresponding demo card, loan, and bill details. The transaction fixture creates three synthetic transactions for each demo customer with a credit-card or savings account; paired customers in each synthetic household share two demo merchants. Demo financial values and activity are illustrative only and must not be treated as real banking behavior.
+The loader executes numbered Cypher files in order and skips the supplemental guide text. Most queries use `MERGE`, so the import can be rerun; the loader also skips identical duplicate query files. The 30 added customers are grouped three per synthetic address and joint savings account. Their individual accounts include 10 credit cards, 10 loans, and 10 savings accounts, with corresponding demo card, loan, and bill details. The transaction fixture creates three synthetic transactions for each of 1,501 selected savings/card or shared joint-savings accounts, covering all 1,030 customers through their account holdings. Customers with an eligible primary savings/card account use that account; others use their joint savings account, so activity on a joint account cannot be attributed to one holder. Customers linked to the same address share two synthetic merchant clusters; this generated pattern is for demonstrating graph traversal only and is not evidence of real co-spending or a relationship. Demo financial values and activity must not be treated as real banking behavior.
 
 If the included demo extension (`C1001`–`C1030`, files 13–22) is already in the graph and you only want to add transactions, load just the new file so earlier imports are not rerun:
 
