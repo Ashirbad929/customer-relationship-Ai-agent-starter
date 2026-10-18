@@ -25,7 +25,7 @@ public class CustomerRelationshipAgentService {
             For questions about spending or transactions, use the bill lookup tool only for statement-level amounts and clearly say itemized purchases and transaction-level spending are not available.
             For questions about loans, outstanding amounts, EMIs, or loan status, call the loan lookup tool.
             For a question that asks for multiple kinds of information, call each relevant lookup tool.
-            Use Tavily's nearby-place search tool for ATM and branch searches. For other current or external information, use Gemini Google Search. If Tavily is unavailable or returns an error, retry the public search with Gemini Google Search. For a location-based question about the selected customer, first retrieve the linked address, then search using only city and postal code; never send a customer's name, ID, full street address, phone number, email, or account details to web search.
+            Use Tavily's nearby-place search tool for ATM and branch searches. For other current or external information, use the configured public web-search provider. If Tavily is unavailable or returns an error, use that configured provider for the search. For a location-based question about the selected customer, first retrieve the linked address, then search using only city and postal code; never send a customer's name, ID, full street address, phone number, email, or account details to web search.
             When you use web results, include clickable Markdown source links from the tool's returned sources.
             Ground every statement in the returned graph data. Explain the evidence types and account roles that support your answer.
             Shared addresses, phone numbers, or emails indicate possible connections only; never state that people are family based only on shared records.
@@ -33,6 +33,8 @@ public class CustomerRelationshipAgentService {
             The data does not establish product eligibility, customer preferences, or a need for a particular card or service.
             Do not claim eligibility or make financial decisions. If asked about products, explain what information is missing and frame any idea as something a bank employee could review.
             If the graph does not contain the requested information, say so clearly. Do not invent customer facts.
+            When the user asks to draw, visualize, map, or diagram customer data, first call the relevant lookup tools, then include a visualization object in the structured response. Let the user's wording control the composition, grouping, and arrangement (for example, top-to-bottom, left-to-right, or grouped by account). Use only entities and relationships returned by tools. Each node ID must identify one returned entity; every edge source and target must refer to a node ID in the nodes array. Do not add inferred family links or facts. Set x and y positions as numbers from 0 to 1000 on a 1000 by 700 canvas, following the requested layout. For ordinary questions, set visualization to null.
+            Return the response in this structure: answer (string) and visualization (null or an object with title, layout, nodes, edges; each node has id, label, type, x, y; each edge has source, target, label).
             """;
 
     private final ChatClient chatClient;
@@ -45,18 +47,18 @@ public class CustomerRelationshipAgentService {
         this.customerGraphTools = customerGraphTools;
     }
 
-    public String answer(String customerId, String question) {
+    public AgentChatResult answer(String customerId, String question) {
         log.debug("Starting agent response generation");
         try {
-            String answer = chatClient.prompt()
+            AgentChatResult result = chatClient.prompt()
                     .system(SYSTEM_PROMPT)
                     .user("Selected customer ID: " + customerId + "\nQuestion: " + question)
                     .tools(customerGraphTools)
                     .toolContext(Map.of("selectedCustomerId", customerId))
                     .call()
-                    .content();
+                    .entity(AgentChatResult.class);
             log.debug("Agent response generation completed");
-            return answer;
+            return result;
         } catch (RuntimeException exception) {
             log.error("Agent response generation failed", exception);
             throw exception;

@@ -36,9 +36,12 @@ public class AgentChatController {
         }
 
         try {
-            String answer = agentService.answer(request.customerId(), request.message());
+            AgentChatResult result = agentService.answer(request.customerId(), request.message());
             log.debug("Agent chat request completed");
-            return new AgentChatResponse(request.customerId(), answer);
+            return new AgentChatResponse(
+                    request.customerId(),
+                    result == null || result.answer() == null ? "The assistant returned an empty answer." : result.answer(),
+                    result == null ? null : result.visualization());
         } catch (RuntimeException exception) {
             log.error("Agent chat request failed", exception);
             throw exception;

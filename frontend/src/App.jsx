@@ -100,6 +100,33 @@ function RelationshipGraph({ data, details }) {
   </div>;
 }
 
+function ModelVisualization({ spec }) {
+  const [zoom, setZoom] = useState(1);
+  const nodeList = (spec?.nodes || []).filter((node) => node?.id && Number.isFinite(Number(node.x)) && Number.isFinite(Number(node.y)));
+  const ids = new Set(nodeList.map((node) => node.id));
+  const edges = (spec?.edges || []).filter((edge) => ids.has(edge.source) && ids.has(edge.target));
+  const nodeById = new Map(nodeList.map((node) => [node.id, node]));
+  if (!nodeList.length) return null;
+  const point = (node) => ({ x: Math.max(100, Math.min(1000, Number(node.x) + 50)), y: Math.max(45, Math.min(715, Number(node.y) + 30)) });
+  const safeType = (type) => String(type || 'record').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+
+  return <div className="model-visualization">
+    <div className="model-visualization-heading"><div><strong>{spec.title || 'Chat-generated graph'}</strong><small>{spec.layout || 'Arrangement chosen from your prompt'}</small></div><div className="graph-zoom" aria-label="Visualization zoom controls"><button type="button" aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(0.7, +(value - 0.15).toFixed(2)))} disabled={zoom <= 0.7}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(1.8, +(value + 0.15).toFixed(2)))} disabled={zoom >= 1.8}>+</button><button type="button" className="zoom-fit" onClick={() => setZoom(1)}>Fit</button></div></div>
+    <div className="model-visualization-canvas"><svg style={{ width: `${zoom * 100}%` }} viewBox="0 0 1100 760" role="img" aria-label={spec.title || 'Graph created from the chat prompt'}>
+      {edges.map((edge, index) => {
+        const from = point(nodeById.get(edge.source));
+        const to = point(nodeById.get(edge.target));
+        return <g key={`${edge.source}-${edge.target}-${index}`}><line className="model-graph-edge" x1={from.x} y1={from.y} x2={to.x} y2={to.y} /><text className="model-graph-edge-label" x={(from.x + to.x) / 2} y={(from.y + to.y) / 2 - 5}>{edge.label || ''}</text></g>;
+      })}
+      {nodeList.map((node) => {
+        const { x, y } = point(node);
+        return <g key={node.id}><title>{node.label || node.id} · {node.type || 'record'}</title><rect className={`model-graph-node type-${safeType(node.type)}`} x={x - 95} y={y - 29} width="190" height="58" rx="9" /><text className="model-graph-node-label" x={x} y={y - 3} textAnchor="middle">{String(node.label || node.id).slice(0, 26)}</text><text className="model-graph-node-type" x={x} y={y + 14} textAnchor="middle">{String(node.type || 'record').slice(0, 26)}</text></g>;
+      })}
+    </svg></div>
+    <div className="model-visualization-footnote">Visualization is arranged by the AI from records retrieved through the customer graph.</div>
+  </div>;
+}
+
 export default function App() {
   const [customerId, setCustomerId] = useState('C0002');
   const [data, setData] = useState(null);
@@ -176,13 +203,13 @@ export default function App() {
 
   function handleSubmit(event) { event.preventDefault(); lookup(); }
 
-  async function updateGraphForChatQuestion(question, selectedId) {
+  async function updateGraphForChatQuestion(question, selectedId, currentDetails) {
     const requested = requestedGraphTopics(question);
     const endpoints = [];
     if (requested.cards) endpoints.push(['cards', '/api/customers/cards']);
     if (requested.bills) endpoints.push(['bills', '/api/customers/bills']);
     if (requested.loans) endpoints.push(['loans', '/api/customers/loans']);
-    if (!endpoints.length) return;
+    if (!endpoints.length) return currentDetails;
     setActiveSection('relationships');
     setGraphUpdateNote('Updating graph with the data requested in chat…');
     try {
@@ -190,12 +217,15 @@ export default function App() {
         const response = await fetchCustomerData(path, selectedId);
         return [key, response[key] || []];
       }));
-      setGraphDetails((current) => ({ ...current, ...Object.fromEntries(resultEntries) }));
+      const nextDetails = { ...currentDetails, ...Object.fromEntries(resultEntries) };
+      setGraphDetails(nextDetails);
       setGraphUpdateNote(requested.asksForSpend
         ? 'The graph shows statement-level bill totals. Itemized purchases and transaction-level spending are not in the current data.'
         : 'Graph expanded with the requested customer records. Financial values marked demo are synthetic sample data.');
+      return nextDetails;
     } catch (requestError) {
       setGraphUpdateNote(`The chat answer is ready, but the graph could not load those records: ${requestError.message}`);
+      return currentDetails;
     }
   }
 
@@ -209,8 +239,10 @@ export default function App() {
     setChatError('');
     setChatPending(true);
     try {
+      let relationshipData = data?.customer?.customerId === selectedId ? data : null;
+      let detailsForCustomer = relationshipData ? graphDetails : { cards: [], bills: [], loans: [] };
       if (data?.customer?.customerId !== selectedId) {
-        const relationshipData = await fetchCustomerData('/api/customers/relationships', selectedId);
+        relationshipData = await fetchCustomerData('/api/customers/relationships', selectedId);
         setData(relationshipData);
         setActiveSection('relationships');
         setGraphDetails({ cards: [], bills: [], loans: [] });
@@ -223,8 +255,12 @@ export default function App() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || payload.message || payload.error || `Chat request failed (${response.status})`);
-      setChatMessages((current) => [...current, { role: 'assistant', content: payload.answer || 'The assistant returned an empty answer.' }]);
-      await updateGraphForChatQuestion(question, selectedId);
+      detailsForCustomer = await updateGraphForChatQuestion(question, selectedId, detailsForCustomer);
+      setChatMessages((current) => [...current, {
+        role: 'assistant',
+        content: payload.answer || 'The assistant returned an empty answer.',
+        visualization: payload.visualization || null,
+      }]);
     } catch (chatRequestError) {
       setChatError(chatRequestError.message || 'Unable to reach the agent.');
     } finally { setChatPending(false); }
@@ -232,8 +268,28 @@ export default function App() {
 
   const chatPanel = <section className="panel chat-panel"><div className="panel-heading"><div><h2>Customer assistant</h2><p>Ask about relationships, cards, bills, or loans</p></div><span className="chat-customer-id">{data?.customer?.customerId || customerId || 'Enter ID'}</span></div>
     <div className="chat-transcript" aria-live="polite">
-      {!chatMessages.length && !chatPending && <div className="chat-empty">Ask about accounts, possible connections, addresses, contact details, card tiers, bills, or loans.</div>}
-      {chatMessages.map((item, index) => <div className={`chat-entry ${item.role}`} key={`${index}-${item.role}`}><span>{item.role === 'user' ? 'You' : 'Assistant'}</span><p>{item.content}</p></div>)}
+      {!chatMessages.length && !chatPending && <div className="chat-empty">
+        <div className="chat-empty-intro"><strong>Explore this customer’s banking relationships</strong><p>Ask in plain language. The assistant retrieves relevant records from FalkorDB and can build an inline graph arranged to match your instructions.</p></div>
+        <div className="chat-capabilities">
+          <div><strong>Accounts & connections</strong><span>Account types, customer roles, joint holders, and possible links from shared address, phone, or email records.</span></div>
+          <div><strong>Contact details</strong><span>Linked addresses, phone numbers, and email addresses recorded for the customer.</span></div>
+          <div><strong>Cards & bills</strong><span>Card products, tiers, demo limits, statement amounts, payment status, and due dates.</span></div>
+          <div><strong>Loans</strong><span>Loan type and status, demo outstanding balance, EMI, and next due date.</span></div>
+          <div><strong>ATM & branch search</strong><span>Ask for nearby public listings using the customer’s city and postal code. Web search needs a configured provider key.</span></div>
+          <div><strong>Custom graph views</strong><span>Ask for a top-to-bottom map, group by account, or focus on a relationship or product type.</span></div>
+        </div>
+        <div className="chat-suggestions-label">TRY A PROMPT</div>
+        <div className="chat-suggestions">
+          {[
+            'Summarize the customer’s accounts and explain each possible connection.',
+            'Draw a top-to-bottom graph of accounts and possible connections.',
+            'Show the linked address and find a nearby ATM.',
+            'Map the customer’s loans and connected accounts.',
+          ].map((prompt) => <button type="button" key={prompt} onClick={() => setChatInput(prompt)}>{prompt}</button>)}
+        </div>
+        <div className="chat-data-note">Shared records are signals for review, not proof of family ties. Supplemental card, bill, and loan values are synthetic demo data.</div>
+      </div>}
+      {chatMessages.map((item, index) => <div className={`chat-entry ${item.role}`} key={`${index}-${item.role}`}><span>{item.role === 'user' ? 'You' : 'Assistant'}</span><p>{item.content}</p>{item.visualization && <ModelVisualization spec={item.visualization} />}</div>)}
       {chatPending && <div className="chat-waiting"><i /> Thinking…</div>}
     </div>
     {chatError && <div className="chat-error" role="alert">{chatError}</div>}

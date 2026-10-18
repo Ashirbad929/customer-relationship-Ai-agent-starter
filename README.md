@@ -95,9 +95,9 @@ When a chat question asks about cards, bills, or loans, the frontend fetches the
 
 ## Agent integration
 
-The agent uses Spring AI's `ChatClient` tool-calling loop with Gemini. It can call separate read-only tools for relationships/accounts, addresses, phone numbers, email addresses, cards, bills, and loans; each delegates to its corresponding Java service and parameterized FalkorDB query. It has two web-search tools: `searchNearbyPlacesWithTavily` for ATM/branch lookups and `searchPublicWeb` for general current information using Gemini Google Search grounding. The agent is instructed to fall back to Gemini Search if Tavily is unavailable or errors. Both tools return source citations to the agent for its final answer.
+The agent uses Spring AI's `ChatClient` tool-calling loop. At startup it selects Gemini when `GEMINI_API_KEY` is present, otherwise OpenAI when `OPENAI_API_KEY` is present. If both are set, Gemini is selected by default. Set `AI_PROVIDER=google-genai` or `AI_PROVIDER=openai` to explicitly choose a provider. The selected provider is used for chat and general public web search. Tavily is used for ATM/branch lookups when configured, with the selected provider as fallback. The agent can call separate read-only tools for relationships/accounts, addresses, phone numbers, email addresses, cards, bills, and loans; each delegates to its corresponding Java service and parameterized FalkorDB query. Web tools return source citations to the agent for its final answer.
 
-Before a web query leaves the backend, the web-search tools remove the selected customer's ID, name, connected-customer names and IDs, account IDs, street/unit address, phone numbers, and email addresses. Local web searches should use only public location details such as city and postal code. The customer graph itself is not sent to either search endpoint. Gemini Google Search uses the Gemini API key and quota; Tavily search uses its own API key and quota. ATM search through Tavily can reduce Gemini grounding usage, although the Gemini chat model still consumes Gemini quota to select tools and write the response.
+Before a web query leaves the backend, the web-search tools remove the selected customer's ID, name, connected-customer names and IDs, account IDs, street/unit address, phone numbers, and email addresses. Local web searches should use only public location details such as city and postal code. The customer graph itself is not sent to either search endpoint. Gemini or OpenAI public search uses the selected provider's key and quota; Tavily search uses its own key and quota. Selecting a provider checks whether its key is configured; it does not detect quota exhaustion or automatically switch chat providers after a failed API request.
 
 The selected customer ID for graph tools is supplied by the backend through tool context. The model cannot submit arbitrary Cypher or choose another customer ID through those tools.
 
@@ -106,9 +106,11 @@ To enable the agent, set these values in the project-root `.env` file:
 | Variable | Value |
 | --- | --- |
 | `AGENT_ENABLED` | `true` |
-| `SPRING_AI_MODEL_CHAT` | `google-genai` |
+| `AI_PROVIDER` | `auto` (Gemini wins if both provider keys are set; may be `google-genai` or `openai`) |
 | `GEMINI_API_KEY` | Your Gemini API key (keep it secret; never commit it) |
 | `GEMINI_MODEL` | `gemini-3.8-flash` by default; choose a model available to your Gemini API project |
+| `OPENAI_API_KEY` | Your OpenAI API key (keep it secret; never commit it) |
+| `OPENAI_MODEL` | `gpt-5-mini` by default; choose a model available to your OpenAI API project |
 | `TAVILY_API_KEY` | Tavily Search API key for ATM and branch searches (keep it secret; never commit it) |
 
 The agent is disabled by default so the graph API can run without AI credentials. Gemini's free-tier availability and limits depend on model and region. The free tier may use submitted prompts to improve Google's products, so use synthetic data for demos. With the agent enabled, call:

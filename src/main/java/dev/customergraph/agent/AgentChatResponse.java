@@ -1,4 +1,4 @@
 package dev.customergraph.agent;
 
-public record AgentChatResponse(String customerId, String answer) {
+public record AgentChatResponse(String customerId, String answer, AgentChatResult.Visualization visualization) {
 }
