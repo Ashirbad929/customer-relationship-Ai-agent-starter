@@ -26,7 +26,7 @@ function requestedGraphTopics(question) {
   const asksForSpend = /\b(spend|spending|spent|transaction|transactions|purchase|purchases|merchant)\b/i.test(question);
   return {
     cards: /\b(card|cards|tier|premium|credit limit|available credit|product)\b/i.test(question),
-    bills: asksForSpend || /\b(bill|bills|billing|statement|statements|payment|payments|paid|due|owed|owe)\b/i.test(question),
+    bills: /\b(bill|bills|billing|statement|statements|payment|payments|paid|due|owed|owe)\b/i.test(question),
     loans: /\b(loan|loans|emi|borrow|borrowed|mortgage|installment|outstanding)\b/i.test(question),
     asksForSpend,
   };
@@ -83,9 +83,10 @@ function RelationshipGraph({ data, details }) {
       {connections.map((connection, index) => {
         const y = position(index, connections.length);
         const name = [connection.firstName, connection.lastName].filter(Boolean).join(' ') || connection.customerId;
+        const evidenceLabel = (connection.traversalEvidence || []).map((item) => `${item.relationshipType} ×${item.sharedRecordCount}`).join(', ') || (connection.evidenceTypes || []).join(', ');
         return <g key={`connection-${connection.customerId}`}>
           <line className="graph-edge connection-edge" x1="550" y1={centerY} x2="950" y2={y} />
-          <text className="edge-label" x="770" y={(centerY + y) / 2 - 5}>{(connection.evidenceTypes || []).join(', ') || 'shared record'}</text>
+          <text className="edge-label" x="770" y={(centerY + y) / 2 - 5}>{evidenceLabel || 'shared record'}</text>
           <rect className="graph-node connection-node" x="950" y={y - 29} width="240" height="58" rx="9" />
           <text className="node-title" x="965" y={y - 5}>{name}</text>
           <text className="node-subtitle" x="965" y={y + 13}>{connection.customerId} · possible link</text>
@@ -220,7 +221,7 @@ export default function App() {
       const nextDetails = { ...currentDetails, ...Object.fromEntries(resultEntries) };
       setGraphDetails(nextDetails);
       setGraphUpdateNote(requested.asksForSpend
-        ? 'The graph shows statement-level bill totals. Itemized purchases and transaction-level spending are not in the current data.'
+        ? 'Statement records are shown in the graph panel. The assistant can separately analyze synthetic transaction and merchant paths from FalkorDB.'
         : 'Graph expanded with the requested customer records. Financial values marked demo are synthetic sample data.');
       return nextDetails;
     } catch (requestError) {
@@ -266,7 +267,7 @@ export default function App() {
     } finally { setChatPending(false); }
   }
 
-  const chatPanel = <section className="panel chat-panel"><div className="panel-heading"><div><h2>Customer assistant</h2><p>Ask about relationships, cards, bills, or loans</p></div><span className="chat-customer-id">{data?.customer?.customerId || customerId || 'Enter ID'}</span></div>
+  const chatPanel = <section className="panel chat-panel"><div className="panel-heading"><div><h2>Customer assistant</h2><p>Ask about relationships, transactions, cards, bills, or loans</p></div><span className="chat-customer-id">{data?.customer?.customerId || customerId || 'Enter ID'}</span></div>
     <div className="chat-transcript" aria-live="polite">
       {!chatMessages.length && !chatPending && <div className="chat-empty">
         <div className="chat-empty-intro"><strong>Explore this customer’s banking relationships</strong><p>Ask in plain language. The assistant retrieves relevant records from FalkorDB and can build an inline graph arranged to match your instructions.</p></div>
@@ -274,6 +275,7 @@ export default function App() {
           <div><strong>Accounts & connections</strong><span>Account types, customer roles, joint holders, and possible links from shared address, phone, or email records.</span></div>
           <div><strong>Contact details</strong><span>Linked addresses, phone numbers, and email addresses recorded for the customer.</span></div>
           <div><strong>Cards & bills</strong><span>Card products, tiers, demo limits, statement amounts, payment status, and due dates.</span></div>
+          <div><strong>Transaction paths</strong><span>Trace synthetic account activity to merchants and find customers with overlapping merchant records.</span></div>
           <div><strong>Loans</strong><span>Loan type and status, demo outstanding balance, EMI, and next due date.</span></div>
           <div><strong>ATM & branch search</strong><span>Ask for nearby public listings using the customer’s city and postal code. Web search needs a configured provider key.</span></div>
           <div><strong>Custom graph views</strong><span>Ask for a top-to-bottom map, group by account, or focus on a relationship or product type.</span></div>
@@ -285,6 +287,7 @@ export default function App() {
             'Draw a top-to-bottom graph of accounts and possible connections.',
             'Show the linked address and find a nearby ATM.',
             'Map the customer’s loans and connected accounts.',
+            'Compare this customer’s merchant activity with others and explain the graph path.',
           ].map((prompt) => <button type="button" key={prompt} onClick={() => setChatInput(prompt)}>{prompt}</button>)}
         </div>
         <div className="chat-data-note">Shared records are signals for review, not proof of family ties. Supplemental card, bill, and loan values are synthetic demo data.</div>
@@ -338,7 +341,7 @@ export default function App() {
                 <div className="analytics-note">A holder is a customer connected to the account by a <code>HOLDS</code> relationship.</div>
             </section>
           </div>
-          {!!data.possibleConnections?.length && <section className="panel connections-panel"><div className="panel-heading"><div><h2>Possible connections</h2><p>Shared records are signals for review, not proof of a family relationship.</p></div></div><div className="connection-chips">{data.possibleConnections.map((connection) => <div className="connection-chip" key={connection.customerId}><span>{[connection.firstName, connection.lastName].filter(Boolean).join(' ') || connection.customerId}</span><small>{connection.customerId} · {(connection.evidenceTypes || []).join(', ')}</small></div>)}</div></section>}
+      {!!data.possibleConnections?.length && <section className="panel connections-panel"><div className="panel-heading"><div><h2>Possible connections</h2><p>Shared records and joint accounts are signals for review, not proof of a family relationship.</p></div></div><div className="connection-chips">{data.possibleConnections.map((connection) => <div className="connection-chip" key={connection.customerId}><span>{[connection.firstName, connection.lastName].filter(Boolean).join(' ') || connection.customerId}</span><small>{connection.customerId}</small>{(connection.traversalEvidence || []).map((evidence) => <small key={`${evidence.relationshipType}-${evidence.path}`}>{evidence.path} · {evidence.sharedRecordCount} record(s)</small>)}</div>)}</div></section>}
         </>}
 
         {!loading && data && activeSection !== 'relationships' && <>

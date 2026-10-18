@@ -18,6 +18,11 @@ public record CustomerRelationshipsResponse(
             String firstName,
             String lastName,
             List<String> evidenceTypes,
-            long sharedRecordCount) {
+            long sharedRecordCount,
+            List<TraversalEvidence> traversalEvidence) {
+    }
+
+    /** A safe, human-readable explanation of a graph path; it omits contact values. */
+    public record TraversalEvidence(String relationshipType, long sharedRecordCount, String path) {
     }
 }

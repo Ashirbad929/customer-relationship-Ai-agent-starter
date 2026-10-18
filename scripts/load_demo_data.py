@@ -36,17 +36,17 @@ def numbered_order(path: Path) -> tuple[int, str]:
     return (int(match.group(1)) if match else 9999, path.name.lower())
 
 
-def load_queries(data_dir: Path, graph) -> int:
-    if not data_dir.is_dir():
+def load_queries(data_path: Path, graph) -> int:
+    if not data_path.exists():
         raise FileNotFoundError(
-            f"Dataset directory not found: {data_dir}\n"
-            f"Pass the folder containing the Cypher .txt files, for example:\n"
+            f"Dataset path not found: {data_path}\n"
+            f"Pass a folder containing Cypher .txt files or one Cypher .txt file, for example:\n"
             f'  python scripts/load_demo_data.py "C:\\path\\to\\cust-rel"'
         )
 
-    files = sorted(data_dir.glob("*.txt"), key=numbered_order)
+    files = [data_path] if data_path.is_file() else sorted(data_path.glob("*.txt"), key=numbered_order)
     if not files:
-        raise FileNotFoundError(f"No .txt files found in {data_dir}")
+        raise FileNotFoundError(f"No .txt files found in {data_path}")
 
     loaded_hashes: set[str] = set()
     loaded_count = 0
@@ -81,18 +81,18 @@ def main() -> None:
         "data_dir",
         nargs="?",
         default=config.get("DEMO_DATA_DIR", str(DEFAULT_DATA_DIR)),
-        help="directory containing numbered Cypher .txt files",
+        help="directory containing numbered Cypher .txt files, or one Cypher .txt file to load alone",
     )
     args = parser.parse_args()
 
-    data_dir = Path(args.data_dir).expanduser().resolve()
+    data_path = Path(args.data_dir).expanduser().resolve()
     url = config.get("FALKORDB_URL", "redis://localhost:6379")
     graph_name = config.get("FALKORDB_GRAPH", "customer_relationships")
     client = FalkorDB.from_url(url)
     try:
         graph = client.select_graph(graph_name)
-        print(f"Loading Cypher files from {data_dir} into FalkorDB graph '{graph_name}'...")
-        count = load_queries(data_dir, graph)
+        print(f"Loading Cypher data from {data_path} into FalkorDB graph '{graph_name}'...")
+        count = load_queries(data_path, graph)
         print(f"Done. Loaded {count} Cypher dataset file(s) into '{graph_name}'.")
     finally:
         client.close()

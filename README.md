@@ -52,7 +52,7 @@ The graph connection endpoint runs a harmless `RETURN 1` query against the confi
 
 ## Data
 
-The numbered Cypher import files are included in `data/cypher/`, including a separate synthetic extension for customers `C1001`–`C1030`. The loader does not generate records or parse the pipe-delimited fixtures directly under `data/`. Confirm the source dataset is approved for sharing before publishing the repository. Never commit credentials.
+The numbered Cypher import files are included in `data/cypher/`, including a separate synthetic extension for customers `C1001`–`C1030` and 60 synthetic transaction records for 20 of those customers. The loader does not generate records or parse the pipe-delimited fixtures directly under `data/`. If the included demo extension (`C1001`–`C1030`, files 13–22) is already loaded, add only the transaction data with `py scripts/load_demo_data.py data/cypher/23_demo_transactions.txt`; this avoids rerunning earlier dataset files. For a fresh graph, use the full default dataset import so the demo accounts exist before the transaction file runs. Confirm the source dataset is approved for sharing before publishing the repository. Never commit credentials.
 
 For a read-aloud project pitch, feature walkthrough, and checked Windows startup steps, see [DEMO_GUIDE.md](DEMO_GUIDE.md).
 
@@ -64,10 +64,10 @@ See [BUILD_FLOW.md](BUILD_FLOW.md) for the project steps, graph schema, initial 
 
 - `GET /api/health` — confirms the Java service is running.
 - `GET /api/graph/health` — checks that the service can issue a query to FalkorDB.
-- `POST /api/customers/relationships` — accepts a JSON body with `customerId`, then returns the customer's accounts, total customer-holder count per account, and possible customer connections sharing an address, phone, or email, with evidence types.
+- `POST /api/customers/relationships` — accepts a JSON body with `customerId`, then returns the customer's accounts, holder counts, and possible customer connections through shared address, phone, email, or jointly held account paths. Each connection includes a safe traversal explanation; phone and email values are withheld.
 - `POST /api/customers/addresses`, `/api/customers/phone-numbers`, `/api/customers/email-addresses` — directly fetch the selected customer's contact records from FalkorDB.
 - `POST /api/customers/cards`, `/api/customers/bills`, `/api/customers/loans` — directly fetch linked card products, credit-card bills, and loan details.
-- `POST /api/agent/chat` — when the agent is enabled, accepts a customer ID and question, then lets the model call the bounded FalkorDB relationship tool and explain the result.
+- `POST /api/agent/chat` — when the agent is enabled, accepts a customer ID and question, then lets the model choose among bounded FalkorDB tools, including a multi-hop synthetic transaction-to-merchant investigation, and explain the evidence.
 - `POST /api/search/openai` — when the agent is enabled, sends a public query directly to OpenAI's Responses API web-search tool and returns its answer and sources. Use only public, non-customer-identifying search text.
 
 Example request:
@@ -93,11 +93,11 @@ npm run dev
 
 Open `http://localhost:5173` and enter a customer ID to view the relationship graph and account-holder analytics. The Relationships, Cards & bills, Loans, and Contact details views call the direct customer endpoints and do not require an AI-provider API call. The assistant panel can answer questions using separate FalkorDB tools for relationship, address, phone, email, card, bill, and loan data. Chat requires `AGENT_ENABLED=true`, a selected provider, and that provider's API key/quota. Public web searches, including ATM and branch lookups, use OpenAI's Responses API web-search tool and require `OPENAI_API_KEY`, regardless of the chat provider. The frontend uses Vite's development proxy, so requests reach Spring Boot at `http://localhost:8080`.
 
-When a chat question asks about cards, bills, or loans, the frontend fetches the matching graph records and expands the SVG with account-to-product, account-to-bill, or account-to-loan links. Asking about spending shows statement-level totals only; transaction-level purchases are not included in the current data.
+When a chat question asks about cards, bills, or loans, the frontend fetches the matching graph records and expands the SVG with account-to-product, account-to-bill, or account-to-loan links. Transaction and merchant analysis is available to the agent for the synthetic demo customers who have transaction fixtures.
 
 ## Agent integration
 
-The agent uses Spring AI's `ChatClient` tool-calling loop. At startup it selects Gemini when `GEMINI_API_KEY` is present, otherwise OpenAI when `OPENAI_API_KEY` is present. If both are set, Gemini is selected by default. Set `AI_PROVIDER=google-genai` or `AI_PROVIDER=openai` to explicitly choose a provider. Chat uses the selected provider. Public web search always uses OpenAI's Responses API web-search tool, so `OPENAI_API_KEY` is required for web searches even when Gemini is selected for chat. The agent can call separate read-only tools for relationships/accounts, addresses, phone numbers, email addresses, cards, bills, and loans; each delegates to its corresponding Java service and parameterized FalkorDB query. OpenAI returns source citations to the agent for its final answer.
+The agent uses Spring AI's `ChatClient` tool-calling loop. At startup it selects Gemini when `GEMINI_API_KEY` is present, otherwise OpenAI when `OPENAI_API_KEY` is present. If both are set, Gemini is selected by default. Set `AI_PROVIDER=google-genai` or `AI_PROVIDER=openai` to explicitly choose a provider. Chat uses the selected provider. Public web search always uses OpenAI's Responses API web-search tool, so `OPENAI_API_KEY` is required for web searches even when Gemini is selected for chat. Based on the user's question, the model selects among read-only tools for relationships/accounts, addresses, phone numbers, email addresses, cards, bills, loans, and synthetic transaction activity; each delegates to its corresponding Java service and parameterized FalkorDB query. Relationship traversal follows shared address/contact records and jointly held accounts. Activity analysis traverses customer → account → transaction → merchant and back through other accounts and transactions to identify shared merchant paths. The assistant receives the evidence path and explains that merchant overlap alone does not establish a personal relationship. OpenAI returns source citations to the agent for its final answer.
 
 Before a web query leaves the backend, the web-search tool removes the selected customer's ID, name, connected-customer names and IDs, account IDs, street/unit address, phone numbers, and email addresses. Local web searches should use only public location details such as city and postal code. The customer graph itself is not sent to OpenAI. Selecting a chat provider checks whether its key is configured; it does not detect quota exhaustion or automatically switch chat providers after a failed API request.
 
@@ -125,7 +125,7 @@ Content-Type: application/json
 
 To test OpenAI web search directly without the chat model's tool selection, call `POST http://localhost:8080/api/search/openai` with `{"query":"ATMs near Pune 411045"}`. This endpoint uses the OpenAI Responses API web-search tool and requires `OPENAI_API_KEY`.
 
-The tools only return graph evidence for the selected customer. The assistant is instructed not to assert family relationships from shared records or claim card eligibility. Supplemental card, bill, and loan fixtures are synthetic and marked `SYNTHETIC_DEMO`; the assistant and UI identify their financial figures as demo data. Each chat request is stateless; conversation memory can be added later.
+The tools only return graph evidence for the selected customer. The assistant is instructed not to assert family relationships from shared records or claim card eligibility. Supplemental card, bill, loan, and transaction fixtures are synthetic and marked `SYNTHETIC_DEMO`; the assistant identifies their financial values and activity as demo data. Each chat request is stateless; conversation memory can be added later.
 
 ## Logging
 

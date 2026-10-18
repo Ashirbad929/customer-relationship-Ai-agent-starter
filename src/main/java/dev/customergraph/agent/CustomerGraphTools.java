@@ -12,6 +12,8 @@ import dev.customergraph.customer.CustomerFinancialService;
 import dev.customergraph.customer.CustomerCardsResponse;
 import dev.customergraph.customer.CustomerBillsResponse;
 import dev.customergraph.customer.CustomerLoansResponse;
+import dev.customergraph.customer.CustomerActivityResponse;
+import dev.customergraph.customer.CustomerActivityService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ToolContext;
@@ -38,6 +40,7 @@ public class CustomerGraphTools {
     private final CustomerPhoneService customerPhoneService;
     private final CustomerEmailService customerEmailService;
     private final CustomerFinancialService customerFinancialService;
+    private final CustomerActivityService customerActivityService;
     private final OpenAiWebSearchService openAiWebSearchService;
 
     public CustomerGraphTools(
@@ -46,12 +49,14 @@ public class CustomerGraphTools {
             CustomerPhoneService customerPhoneService,
             CustomerEmailService customerEmailService,
             CustomerFinancialService customerFinancialService,
+            CustomerActivityService customerActivityService,
             OpenAiWebSearchService openAiWebSearchService) {
         this.customerRelationshipsService = customerRelationshipsService;
         this.customerAddressService = customerAddressService;
         this.customerPhoneService = customerPhoneService;
         this.customerEmailService = customerEmailService;
         this.customerFinancialService = customerFinancialService;
+        this.customerActivityService = customerActivityService;
         this.openAiWebSearchService = openAiWebSearchService;
     }
 
@@ -95,6 +100,12 @@ public class CustomerGraphTools {
     public CustomerLoansResponse loadSelectedCustomerLoans(ToolContext toolContext) {
         log.debug("Agent selected the loan lookup tool");
         return customerFinancialService.getLoans(selectedCustomerId(toolContext));
+    }
+
+    @Tool(description = "Trace the selected customer's synthetic account activity and find other customers who transacted at the same merchants. Use for transaction, spending-pattern, merchant, or shared-merchant questions. Results are fabricated SYNTHETIC_DEMO data; shared merchant activity is not proof of a personal relationship or suspicious behavior.")
+    public CustomerActivityResponse investigateSelectedCustomerActivity(ToolContext toolContext) {
+        log.debug("Agent selected multi-hop customer-account-transaction-merchant traversal");
+        return customerActivityService.getActivity(selectedCustomerId(toolContext));
     }
 
     @Tool(description = "Search the public web directly through OpenAI for current or external information, including ATM and bank-branch listings. Use this tool whenever the user asks for web-search results. For customer-specific nearby searches, first retrieve the linked address and search using only city and postal code. Never send customer names, IDs, full street addresses, phone numbers, email addresses, or account details to web search. Include source links in the result.")
