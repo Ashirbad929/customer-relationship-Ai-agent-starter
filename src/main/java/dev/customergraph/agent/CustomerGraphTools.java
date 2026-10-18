@@ -6,6 +6,12 @@ import dev.customergraph.customer.CustomerAddressResponse;
 import dev.customergraph.customer.CustomerAddressService;
 import dev.customergraph.customer.CustomerPhoneResponse;
 import dev.customergraph.customer.CustomerPhoneService;
+import dev.customergraph.customer.CustomerEmailResponse;
+import dev.customergraph.customer.CustomerEmailService;
+import dev.customergraph.customer.CustomerFinancialService;
+import dev.customergraph.customer.CustomerCardsResponse;
+import dev.customergraph.customer.CustomerBillsResponse;
+import dev.customergraph.customer.CustomerLoansResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ToolContext;
@@ -29,17 +35,26 @@ public class CustomerGraphTools {
     private final CustomerRelationshipsService customerRelationshipsService;
     private final CustomerAddressService customerAddressService;
     private final CustomerPhoneService customerPhoneService;
-    private final OpenAiWebSearchService openAiWebSearchService;
+    private final CustomerEmailService customerEmailService;
+    private final CustomerFinancialService customerFinancialService;
+    private final GeminiWebSearchService geminiWebSearchService;
+    private final TavilyWebSearchService tavilyWebSearchService;
 
     public CustomerGraphTools(
             CustomerRelationshipsService customerRelationshipsService,
             CustomerAddressService customerAddressService,
             CustomerPhoneService customerPhoneService,
-            OpenAiWebSearchService openAiWebSearchService) {
+            CustomerEmailService customerEmailService,
+            CustomerFinancialService customerFinancialService,
+            GeminiWebSearchService geminiWebSearchService,
+            TavilyWebSearchService tavilyWebSearchService) {
         this.customerRelationshipsService = customerRelationshipsService;
         this.customerAddressService = customerAddressService;
         this.customerPhoneService = customerPhoneService;
-        this.openAiWebSearchService = openAiWebSearchService;
+        this.customerEmailService = customerEmailService;
+        this.customerFinancialService = customerFinancialService;
+        this.geminiWebSearchService = geminiWebSearchService;
+        this.tavilyWebSearchService = tavilyWebSearchService;
     }
 
     @Tool(description = "Look up the selected customer's accounts and possible connections through shared address, phone, or email records. Use for account and relationship questions. Shared records are evidence of a possible connection, not proof of family.")
@@ -60,14 +75,53 @@ public class CustomerGraphTools {
         return customerPhoneService.getPhoneNumbers(selectedCustomerId(toolContext));
     }
 
-    @Tool(description = "Search the live public web for current or external information needed to answer the user. For ATM searches, use only the city and postal code. Never include customer names, IDs, full street addresses, phone numbers, email addresses, or account details in the query. Return source links with the result.")
-    public OpenAiWebSearchResponse searchPublicWeb(
+    @Tool(description = "Retrieve the selected customer's linked email addresses. Use only when asked about contact information.")
+    public CustomerEmailResponse loadSelectedCustomerEmailAddresses(ToolContext toolContext) {
+        log.debug("Agent selected the email lookup tool");
+        return customerEmailService.getEmailAddresses(selectedCustomerId(toolContext));
+    }
+
+    @Tool(description = "Retrieve the selected customer's credit-card accounts, linked card product tiers, and demo-only card details. Clearly state that values marked SYNTHETIC_DEMO are fabricated sample data.")
+    public CustomerCardsResponse loadSelectedCustomerCards(ToolContext toolContext) {
+        log.debug("Agent selected the credit-card lookup tool");
+        return customerFinancialService.getCards(selectedCustomerId(toolContext));
+    }
+
+    @Tool(description = "Retrieve the selected customer's linked credit-card bills, amounts, due dates, and statuses. Clearly state that records marked SYNTHETIC_DEMO are fabricated sample data.")
+    public CustomerBillsResponse loadSelectedCustomerBills(ToolContext toolContext) {
+        log.debug("Agent selected the credit-card bill lookup tool");
+        return customerFinancialService.getBills(selectedCustomerId(toolContext));
+    }
+
+    @Tool(description = "Retrieve the selected customer's linked loan details, types, statuses, balances, EMI, and due dates. Clearly state that values marked SYNTHETIC_DEMO are fabricated sample data.")
+    public CustomerLoansResponse loadSelectedCustomerLoans(ToolContext toolContext) {
+        log.debug("Agent selected the loan lookup tool");
+        return customerFinancialService.getLoans(selectedCustomerId(toolContext));
+    }
+
+    @Tool(description = "Search the public web with Gemini Google Search grounding for general current or external information. Use this as the general search provider and fallback when Tavily is unavailable or unsuitable. For ATM or nearby-place lookups, prefer the dedicated Tavily nearby-place search tool. Never send customer names, IDs, full street addresses, phone numbers, email addresses, or account details to web search. Return source links with the result.")
+    public PublicWebSearchResponse searchPublicWeb(
             @ToolParam(description = "A concise public-information search query. Do not include customer-identifying or contact details.") String query,
             ToolContext toolContext) {
         String customerId = selectedCustomerId(toolContext);
         String safeQuery = removeCustomerData(query, customerId);
-        log.debug("Agent selected web search; sanitized query length is {} characters", safeQuery.length());
-        return openAiWebSearchService.search(safeQuery);
+        log.debug("Agent selected Gemini web search; sanitized query length is {} characters", safeQuery.length());
+        return geminiWebSearchService.search(safeQuery);
+    }
+
+    @Tool(description = "Search the public web with Tavily for nearby places such as ATMs and branches. Prefer this tool for ATM lookups and searches where place listings are needed. For customer-specific nearby searches, first retrieve the linked address and query only with city and postal code. Never include customer names, IDs, full street addresses, phone numbers, email addresses, or account details. Return source links with the results.")
+    public PublicWebSearchResponse searchNearbyPlacesWithTavily(
+            @ToolParam(description = "A concise public search query for nearby places, using only city and postal code when location is customer-derived.") String query,
+            ToolContext toolContext) {
+        String customerId = selectedCustomerId(toolContext);
+        String safeQuery = removeCustomerData(query, customerId);
+        log.debug("Agent selected Tavily place search; sanitized query length is {} characters", safeQuery.length());
+        try {
+            return tavilyWebSearchService.search(safeQuery);
+        } catch (RuntimeException exception) {
+            log.warn("Tavily place search failed; falling back to Gemini Google Search: {}", exception.getMessage());
+            return geminiWebSearchService.search(safeQuery);
+        }
     }
 
     private String selectedCustomerId(ToolContext toolContext) {

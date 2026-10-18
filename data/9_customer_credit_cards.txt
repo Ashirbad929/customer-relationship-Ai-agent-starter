@@ -1,0 +1,7 @@
+# SYNTHETIC DEMO DATA — pipe-delimited; customer/account IDs are join keys.
+# C0001 and A00874 match IDs seen in the existing demo graph; other values are illustrative.
+card_id|customer_id|account_id|product_id|holder_role|status|credit_limit_inr|available_credit_inr|opened_date
+CARD001|C0001|A00874|CP003|PRIMARY|ACTIVE|300000|214500|2023-06-12
+CARD002|C0002|A02001|CP002|PRIMARY|ACTIVE|150000|88300|2024-02-05
+CARD003|C0002|A02002|CP001|JOINT|ACTIVE|80000|42100|2024-09-18
+CARD004|C0003|A02003|CP004|PRIMARY|BLOCKED|500000|0|2022-11-03

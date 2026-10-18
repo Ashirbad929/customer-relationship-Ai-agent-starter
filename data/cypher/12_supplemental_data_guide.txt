@@ -1,0 +1,17 @@
+SUPPLEMENTAL SYNTHETIC DEMO DATA — these values are invented and must not be treated as actual balances, billing records, or product terms.
+
+These files use the existing source format: executable FalkorDB/Cypher UNWIND queries.
+Run them in this order after loading the existing 1_addresses.txt through 7_holds.txt files:
+1. 8_card_products.txt — creates CardProduct nodes (STANDARD, MID, PREMIUM, BUSINESS).
+2. 9_credit_card_products.txt — links existing CREDIT_CARD Account nodes to products and adds demo-only limit/status properties.
+3. 10_loan_details.txt — creates LoanDetails nodes and links them from existing LOAN Account nodes.
+4. 11_credit_card_bills.txt — creates statement nodes and links them from existing CREDIT_CARD Account nodes.
+
+The existing customer-to-account HOLDS edges provide the customer path:
+(Customer)-[:HOLDS]->(Account)-[:HAS_PRODUCT]->(CardProduct)
+(Customer)-[:HOLDS]->(Account)-[:HAS_LOAN_DETAILS]->(LoanDetails)
+(Customer)-[:HOLDS]->(Account)-[:HAS_BILL]->(CreditCardBill)
+
+These generated records are keyed to account IDs that exist in 2_accounts.txt and are intended only for the synthetic demo graph. All supplemental financial values/properties are prefixed demo_ where attached to existing accounts. Do not load them into a graph containing real banking records.
+
+Each file is a single Cypher query, matching the existing data files. The RETURN count at the end reports the number of linked account/record rows.

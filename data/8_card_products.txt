@@ -1,0 +1,6 @@
+# SYNTHETIC DEMO DATA — pipe-delimited; not a real bank product catalogue.
+product_id|product_name|card_network|tier|annual_fee_inr|key_benefit
+CP001|Everyday Credit Card|VISA|STANDARD|0|Basic purchases and online payments
+CP002|Rewards Credit Card|VISA|MID|999|Rewards on eligible everyday spending
+CP003|Travel Premium Credit Card|VISA|PREMIUM|4999|Travel rewards and lounge access subject to terms
+CP004|Business Credit Card|MASTERCARD|BUSINESS|2500|Business expense tracking and employee cards

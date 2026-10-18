@@ -1,0 +1,6 @@
+# SYNTHETIC DEMO DATA — pipe-delimited; amounts and statuses are fictional.
+loan_id|customer_id|loan_type|loan_status|principal_inr|outstanding_inr|emi_inr|next_due_date|opened_date
+LN001|C0001|PERSONAL|ACTIVE|500000|284000|18250|2026-11-05|2024-04-05
+LN002|C0002|HOME|ACTIVE|4200000|3675000|42100|2026-11-10|2022-08-10
+LN003|C0003|VEHICLE|CLOSED|900000|0|0||2020-02-14
+LN004|C0004|EDUCATION|PAST_DUE|650000|412500|12500|2026-10-20|2023-07-20
