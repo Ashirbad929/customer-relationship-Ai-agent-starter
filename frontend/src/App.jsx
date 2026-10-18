@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const HISTORY_KEY = 'relationship-lookup-history';
 
@@ -138,6 +138,7 @@ export default function App() {
   const [chatInput, setChatInput] = useState('');
   const [chatPending, setChatPending] = useState(false);
   const [chatError, setChatError] = useState('');
+  const chatTranscriptRef = useRef(null);
   const [graphStatus, setGraphStatus] = useState('checking');
   const [activeSection, setActiveSection] = useState('relationships');
   const [sectionCache, setSectionCache] = useState({});
@@ -152,6 +153,11 @@ export default function App() {
       .then(() => setGraphStatus('connected'))
       .catch(() => setGraphStatus('unavailable'));
   }, []);
+
+  useEffect(() => {
+    const transcript = chatTranscriptRef.current;
+    if (transcript) transcript.scrollTop = transcript.scrollHeight;
+  }, [chatMessages, chatPending, chatError]);
 
   const rankedAccounts = useMemo(() => [...(data?.accounts || [])].sort((a, b) => (b.holderCount || 0) - (a.holderCount || 0)), [data]);
   const maxHolders = Math.max(1, ...rankedAccounts.map((account) => account.holderCount || 0));
@@ -268,7 +274,7 @@ export default function App() {
   }
 
   const chatPanel = <section className="panel chat-panel"><div className="panel-heading"><div><h2>Customer assistant</h2><p>Ask about relationships, transactions, cards, bills, or loans</p></div><span className="chat-customer-id">{data?.customer?.customerId || customerId || 'Enter ID'}</span></div>
-    <div className="chat-transcript" aria-live="polite">
+    <div ref={chatTranscriptRef} className="chat-transcript" aria-live="polite" aria-busy={chatPending}>
       {!chatMessages.length && !chatPending && <div className="chat-empty">
         <div className="chat-empty-intro"><strong>Explore this customer’s banking relationships</strong><p>Ask in plain language. The assistant retrieves relevant records from FalkorDB and can build an inline graph arranged to match your instructions.</p></div>
         <div className="chat-capabilities">
@@ -293,7 +299,7 @@ export default function App() {
         <div className="chat-data-note">Shared records are signals for review, not proof of family ties. Supplemental card, bill, and loan values are synthetic demo data.</div>
       </div>}
       {chatMessages.map((item, index) => <div className={`chat-entry ${item.role}`} key={`${index}-${item.role}`}><span>{item.role === 'user' ? 'You' : 'Assistant'}</span><p>{item.content}</p>{item.visualization && <ModelVisualization spec={item.visualization} />}</div>)}
-      {chatPending && <div className="chat-waiting"><i /> Thinking…</div>}
+      {chatPending && <div className="chat-waiting"><span className="chat-waiting-avatar">R</span><div className="chat-waiting-copy"><strong>Tracing the customer graph</strong><span>Checking linked records and preparing your answer</span></div><div className="chat-waiting-dots" aria-label="Working"><i /><i /><i /></div></div>}
     </div>
     {chatError && <div className="chat-error" role="alert">{chatError}</div>}
     <form className="chat-form" onSubmit={sendChat}><textarea aria-label="Message the customer assistant" value={chatInput} onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChat(event); } }} placeholder="Ask a question…" rows={2} disabled={chatPending} /><button type="submit" aria-label="Send message" disabled={chatPending || !chatInput.trim() || !(data?.customer?.customerId || customerId.trim())}>{chatPending ? '…' : '↑'}</button></form>
